@@ -1,0 +1,12 @@
+# Data and artifacts: never commit (HF license CC BY-NC, V-Nexus PII)
+/data/*
+/artifacts/*
+!/data/.gitkeep
+!/artifacts/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.env*
+*.egg-info/

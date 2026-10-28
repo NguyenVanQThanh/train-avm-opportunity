@@ -1,0 +1,33 @@
+# v0: prototype on HF data. Artifacts are flagged NON_PRODUCTION (CC BY-NC 4.0).
+run_id: v0-hf
+non_production: true
+seed: 42
+sources:
+  hf_dataset: tinixai/vietnam-real-estates
+  hf_revision: null            # PIN before first run (stage `fetch` refuses null)
+  crosswalk_repo: tranngocminhhieu/vietnamadminunits
+  crosswalk_file: convert_legacy_2025_with_location_and_default_ward.csv
+  crosswalk_commit: null       # PIN before first run
+scope:
+  province_code_new: null      # HCM province code, fill after crosswalk inspection
+  price_vnd: [100000000, 500000000000]
+  area_m2: [5, 50000]
+  frontage_m: [1, 50]
+  road_width_m: [0.5, 60]
+crosswalk:
+  min_match_rate: 0.95         # hard stop below this
+cleaning:
+  mad_k: 4
+  price_ref_min_rows: 20
+split:
+  train: ["2025-06-01", "2026-01-31"]
+  val: ["2026-02-01", "2026-02-28"]
+  test_a: ["2026-03-01", "2026-03-31"]
+  group_kfold: 5
+cqr:
+  alpha: 0.10
+  segment: [ptype_group, ward_code_new]
+gate:
+  test_a_mdape_max: 0.15
+  test_a_ppe15_min: 0.50
+  test_b_mdape_warn: 0.25

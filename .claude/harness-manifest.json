@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "harnessVersion": "1",
+  "syncFiles": [],
+  "preservePaths": [
+    ".claude/allowed-hosts.txt",
+    ".claude/hooks/post-edit-advisor.sh",
+    ".claude/memory-mirror/MEMORY.md",
+    ".claude/protected-paths.txt",
+    ".claude/rules/project/browser-mcp-profiles.md",
+    ".claude/rules/project/git-workflow.md",
+    ".claude/rules/project/module-md.md",
+    ".claude/rules/project/obsidian-memory.md",
+    ".claude/rules/project/processes-layout.md",
+    ".claude/rules/project/skill-superpowers.md",
+    ".claude/rules/project/social-posting-safety.md",
+    ".claude/rules/project/test-parallel.md"
+  ],
+  "installEnv": {
+    "HARNESS_CORE_DIRS": "src",
+    "HARNESS_RISK_DIRS": "",
+    "HARNESS_PROJECT_SLUG": "train-avm-opportunity",
+    "HARNESS_BRANCH": "",
+    "HARNESS_TEST_CMD": "none",
+    "HARNESS_GROUP_SUBAGENTS": "y",
+    "HARNESS_GROUP_GUARD": "y",
+    "HARNESS_GROUP_QUALITY": "y",
+    "HARNESS_GROUP_COMMANDS": "y",
+    "HARNESS_GROUP_SKILLS": "y",
+    "HARNESS_GROUP_RULES": "y",
+    "HARNESS_GROUP_GITHOOKS": "y",
+    "HARNESS_GROUP_DEPLOY": "y",
+    "HARNESS_GROUP_PII": "n",
+    "HARNESS_DEPLOY_SSH_HOST": "<deploy-ssh-host>",
+    "HARNESS_DEPLOY_SERVICE": "<service-name>",
+    "HARNESS_DEPLOY_PATH": "<remote-repo-path>",
+    "HARNESS_DEPLOY_BRANCH": "",
+    "HARNESS_DEPLOY_REMOTE": "origin",
+    "HARNESS_DEPLOY_HEALTHCHECK": "<healthcheck-cmd>",
+    "HARNESS_CLOAK_MCP_CMD": "cloakbrowsermcp",
+    "HARNESS_ACE_DIR": ""
+  },
+  "modelDefaults": {
+    "gemini": "gemini-3.5-flash",
+    "codex": "gpt-5.6-luna",
+    "deepseek": "openai/ds/deepseek-v4-pro"
+  },
+  "settings": {
+    "hooks": [
+      {
+        "event": "PostToolUse",
+        "matcher": "Bash",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-bash-stuck-detector.sh"
+      },
+      {
+        "event": "PostToolUse",
+        "matcher": "Edit|Write|MultiEdit",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-advisor.sh"
+      },
+      {
+        "event": "PreCompact",
+        "matcher": "auto",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-compact-guard.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Bash",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-bash-gate.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Bash",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-browser-profile-gate.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Bash",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-commit-deploy-doc.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-content-scan.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-orchestrator-gate.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-edit-service-alert-gate.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Read|Edit|Write|MultiEdit",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-read-inject-dir-doc.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "Task",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-task-dispatch-gate.sh"
+      },
+      {
+        "event": "PreToolUse",
+        "matcher": "mcp__(pw_|cloak|playwright|browser).*",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre-browser-profile-gate.sh"
+      },
+      {
+        "event": "SessionStart",
+        "matcher": "",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"
+      },
+      {
+        "event": "SubagentStop",
+        "matcher": "",
+        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-stop-record.sh"
+      }
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf .git:*)",
+      "Edit(./**/*.pem)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(./secrets/**)",
+      "Read(./**/*.pem)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Write(./**/*.pem)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(./secrets/**)"
+    ],
+    "allow": [
+      "Bash"
+    ],
+    "env": {
+      "HARNESS_DELEGATE": "1",
+      "HARNESS_RISK_DIRS": ""
+    },
+    "statusLineCommand": "bash $CLAUDE_PROJECT_DIR/.claude/statusline-orchestration.sh"
+  }
+}
