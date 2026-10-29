@@ -4,12 +4,13 @@ non_production: true
 seed: 42
 sources:
   hf_dataset: tinixai/vietnam-real-estates
-  hf_revision: null            # PIN before first run (stage `fetch` refuses null)
-  crosswalk_repo: tranngocminhhieu/vietnamadminunits
-  crosswalk_file: convert_legacy_2025_with_location_and_default_ward.csv
-  crosswalk_commit: null       # PIN before first run
+  hf_revision: ca3fedcbb089bf65f7e4cfb03316cce4bd0d779f   # pinned 2026-10-28; `fetch` refuses null
+  crosswalk_repo: tranngocminhhieu/vietnamadminunits      # GitHub (MIT), not HF
+  crosswalk_file: data/processed/convert_legacy_2025_with_location_and_default_ward.csv
+  crosswalk_commit: 7fac8c45805aad9916b17237c54baf4502303b93  # pinned 2026-10-28; `fetch` refuses null
 scope:
-  province_code_new: null      # HCM province code, fill after crosswalk inspection
+  province_code_new: "79"      # HCM (merged: Binh Duong + Ba Ria-Vung Tau + HCM), from crosswalk newProvinceCode
+  province_code_db: "29"       # same province in V-Nexus provinces.code (ward codes there are 8 digits)
   price_vnd: [100000000, 500000000000]
   area_m2: [5, 50000]
   frontage_m: [1, 50]
@@ -18,16 +19,51 @@ crosswalk:
   min_match_rate: 0.95         # hard stop below this
 cleaning:
   mad_k: 4
-  price_ref_min_rows: 20
+  mad_min_cell_rows: 20        # (ward, ptype) cells below this use ptype-wide MAD stats
+features:
+  price_ref_min_rows: 20       # price_ref cells below this fall back to ptype-wide median
+  price_ref_smoothing_m: 20    # street effect weight n / (n + m)
+  enc_folds: 5                 # row-level folds for out-of-fold price_ref on train rows
 split:
   train: ["2025-06-01", "2026-01-31"]
   val: ["2026-02-01", "2026-02-28"]
   test_a: ["2026-03-01", "2026-03-31"]
   group_kfold: 5
+model:
+  early_stop_holdout_days: 14  # last N days of train: early stopping only, never fit on
+  num_boost_round: 3000
+  early_stopping_rounds: 100
+  params:                      # shared by point/q05/q95
+    learning_rate: 0.05
+    num_leaves: 127
+    min_data_in_leaf: 50
+    feature_fraction: 0.8
+    bagging_fraction: 0.8
+    bagging_freq: 1
+    lambda_l2: 1.0
+    max_bin: 255
+    num_threads: 0
+    deterministic: true
+    force_row_wise: true
+    verbose: -1
 cqr:
-  alpha: 0.10
-  segment: [ptype_group, ward_code_new]
+  alpha: 0.10                  # 90% interval; q05/q95 file names assume this value
+  min_segment_rows: 100        # (ptype, ward) segments below this use ptype-wide q_hat
+evaluate:
+  min_slice_rows: 30           # slices smaller than this are skipped (metrics too noisy)
+  min_ward_rows: 200           # wards below this are left out of the per-ward distribution
+  price_quantiles: 5           # slices by predicted-price quantile (not by actual: no target selection)
+  area_bins_m2: [0, 40, 60, 80, 120, 200, 100000]
+  unseen_ward:                 # ward-grouped k-fold, point model refit per fold (slow)
+    enabled: true
+    num_boost_round: 1000      # capped below model.num_boost_round to bound runtime; slightly pessimistic
+  test_b: {enabled: true, min_rows: 30}
 gate:
+  coverage_range: [0.87, 0.93]    # warn only
+  prd_range: [0.98, 1.03]         # warn only (global and ptype segments >= segment_min_rows)
+  segment_min_rows: 2000
+  unseen_ward_mdape_warn: 0.25
+  default_split_gap_warn: 0.05    # default_split MdAPE minus exact MdAPE
   test_a_mdape_max: 0.15
   test_a_ppe15_min: 0.50
   test_b_mdape_warn: 0.25

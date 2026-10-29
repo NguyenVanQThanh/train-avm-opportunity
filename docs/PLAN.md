@@ -23,24 +23,25 @@ Quy ước chung: output ở `data/<run_id>/<stage>/` (parquet + `*_report.json`
 
 ## S2. crosswalk (`extract/crosswalk.py`)
 
-- **Vào**: raw. **Ra**: `crosswalk/listings.parquet` (+ `ward_code_new`, `province_code_new`, `ward_confidence`), `crosswalk_report.json`.
+- **Vào**: raw. **Ra**: `crosswalk/listings.parquet` (+ `ward_code_new`, `ward_code_db`, `province_code_new`, `ward_confidence`), `crosswalk_report.json`.
 - **Làm**: chuẩn hóa tên 2 phía (bỏ dấu, hạ chữ, bỏ tiền tố, gộp khoảng trắng; quận ghi số → "Quận N"); khớp theo (tỉnh, quận, phường) cũ; zero-pad mã 5 chữ số; gắn `exact` / `default_split`; dòng không khớp bị bỏ. Xác định mã HCM mới từ CSV rồi ghi vào config `province_code_new`.
 - **Báo cáo**: tỉ lệ khớp, tỉ lệ `default_split`, top 30 khóa không khớp theo số dòng, số dòng theo `province_code_new`.
-- **Cổng dừng**: tỉ lệ khớp HCM < `min_match_rate` → exit 2. Đối chiếu `wards.code` DB: mã lệch → exit 2.
-- **Đối chiếu DB**: đọc danh sách `wards.code` qua `vnexus_db.fetch_ward_codes()` hoặc `--wards-file` (CSV export), để không phụ thuộc kết nối DB khi dev.
+- **Cổng dừng**: tỉ lệ khớp (mẫu số = dòng đủ tỉnh/quận/phường) < `min_match_rate` → exit 2. Phường mới HCM không ánh xạ 1–1 sang `wards.code` (khớp tên giữ dấu) → exit 2.
+- **Dòng thiếu quận/phường (15,2%)**: loại bỏ ở v0, báo `rows_missing_location`. Lý do và các cách cứu đã đo: plan BE §9.13.
+- **Đối chiếu DB**: `--wards-file` (CSV từ `scripts/export_wards.py`, đọc DB qua biến `AVM_DB_*`, chỉ SELECT). Bắt buộc.
 - **Test**: bảng nhỏ tổng hợp: khớp exact, split mặc định, quận số, tên biến thể, không khớp.
 
 ## S3. clean (`clean/rules.py`)
 
 - **Vào**: crosswalk. **Ra**: `clean/listings.parquet`, `clean_report.json` (số dòng bị loại theo từng luật, tỉ lệ giá < 100 triệu).
-- **Thứ tự**: lọc `province_code_new` = HCM → bỏ price null/0 → giá trong [100 triệu, 500 tỷ] → area ngoài [5, 50.000] bỏ dòng → ánh xạ `ptype_group` (§9.5, loại 3 loại ngoài phạm vi) → khử trùng theo (`ward_code_new`, `street_name`, `area_m2`, `price`, ngày) → loại ngoại lai MAD(`log(price/area)`) > 4 theo (`ward_code_new`, `ptype_group`), ô thưa dùng `ptype_group` toàn HCM.
+- **Thứ tự**: lọc `province_code_new` = HCM → bỏ price null/0 → giá trong [100 triệu, 500 tỷ] → area ngoài [5, 50.000] bỏ dòng → ánh xạ `ptype_group` (§9.5, loại 3 loại ngoài phạm vi) → khử trùng theo (`ward_code_db`, `street_name`, `area_m2`, `price`, ngày) → loại ngoại lai MAD(`log(price/area)`) > 4 theo (`ward_code_db`, `ptype_group`), ô thưa dùng `ptype_group` toàn HCM.
 - **Quyết định tôi tự đặt (cần bạn xác nhận)**: plan ghi "kẹp" cho `frontage_m` (1–50) và `road_width_m` (0,5–60). Giá trị ngoài khoảng là lỗi nhập (max 9.080.000), kẹp về 50 sẽ thành số sai. Tôi đặt giá trị ngoài khoảng → NaN (cây xử lý NaN gốc), không kẹp.
 - **Test**: mỗi luật 1 case; MAD với ô thưa; dedup giữ đúng dòng.
 
 ## S4. split (`split.py`)
 
 - **Vào**: clean. **Ra**: `split/{train,val,test_a}.parquet`, cột `fold` (0–4) trên train.
-- **Làm**: chia theo `published_at` theo config; `GroupKFold(5)` theo `ward_code_new` trên train. Test B không thuộc stage này (lấy từ DB ở S8).
+- **Làm**: chia theo `published_at` theo config; `GroupKFold(5)` theo `ward_code_db` trên train. Test B không thuộc stage này (lấy từ DB ở S8).
 - **Kiểm**: không phường nào nằm ở 2 fold; không dòng nào lọt 2 tập; ngày các tập không chồng.
 - **Test**: hai kiểm trên bằng dữ liệu tổng hợp.
 
@@ -55,7 +56,7 @@ Quy ước chung: output ở `data/<run_id>/<stage>/` (parquet + `*_report.json`
 ## S6. baseline (`train/baseline.py`)
 
 - **Vào**: features. **Ra**: `baseline_metrics.json`.
-- **Làm**: trung vị `price/area` theo (`ward_code_new`, `ptype_group`) × `area`; ô thưa fallback như S5.
+- **Làm**: trung vị `price/area` theo (`ward_code_db`, `ptype_group`) × `area`; ô thưa fallback như S5.
 - **Xong khi**: có MdAPE/PPE15 baseline trên val và test A để model phải vượt.
 
 ## S7. train + CQR (`train/lgbm.py`, `train/cqr.py`)
@@ -63,7 +64,7 @@ Quy ước chung: output ở `data/<run_id>/<stage>/` (parquet + `*_report.json`
 - **Vào**: features. **Ra**: `models/model_{point,q05,q95}.txt`, `conformal.json`.
 - **Làm**: 3 model LightGBM (L2 trên log price, quantile 0,05 và 0,95) cùng feature, category khai báo rõ, seed cố định.
 - **Phân vai tập (tôi đề xuất)**: fit trên train trừ 2 tuần cuối (early stopping), calibration CQR trên val (2026-02), test A chỉ để đánh giá cuối. Tránh dùng cùng tập cho early stopping và calibration.
-- **CQR**: `q̂` theo phân đoạn (`ptype_group` × `ward_code_new`), phân đoạn có < ngưỡng dòng rơi về `ptype_group`; cận = `[q05 − q̂, q95 + q̂]`.
+- **CQR**: `q̂` theo phân đoạn (`ptype_group` × `ward_code_db`), phân đoạn có < ngưỡng dòng rơi về `ptype_group`; cận = `[q05 − q̂, q95 + q̂]`.
 - **Test**: model nạp lại cho dự đoán giống hệt; coverage trên calibration ≈ 90%; thứ tự q05 ≤ point ≤ q95 sau CQR (cắt nếu vi phạm).
 
 ## S8. evaluate + gate (`evaluate/metrics.py`, `gate.py`)
